@@ -1,0 +1,90 @@
+/* Layout: placar de auditório. Números grandes, alternativas em blocos sólidos,
+   barra superior com PIN sempre visível. Um visual só (claro), pensado pra projetor e celular. */
+:root {
+  --paper: #F2F3EC;
+  --card: #FFFFFF;
+  --ink: #14161A;
+  --muted: #5B616B;
+  --line: #D8DBD0;
+  --soft: #E6E8DF;
+  --a: #D9472B;
+  --b: #18806A;
+  --c: #E3A400;
+  --d: #3A47A8;
+  --good: #18806A;
+  --bad: #C2342A;
+  --bonus: #E3A400;
+  --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 14px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.45 var(--body);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+  border-radius: 999px; padding: 12px 22px; font-weight: 700; cursor: pointer;
+  font-size: 1rem; line-height: 1; white-space: nowrap;
+  transition: transform .08s ease, background .15s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+.btn.ghost { background: transparent; color: var(--ink); }
+.btn.small { padding: 8px 14px; font-size: .9rem; }
+.btn.big { padding: 18px 34px; font-size: 1.25rem; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+:focus-visible { outline: 3px solid var(--d); outline-offset: 2px; }
+
+.label {
+  font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.input {
+  width: 100%; border: 2px solid var(--line); background: var(--card); border-radius: 10px;
+  padding: 12px 14px; outline: none;
+}
+.input:focus { border-color: var(--ink); }
+
+/* Selo de pontos em dobro/triplo */
+.bonus {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bonus); color: var(--ink); font-weight: 800;
+  border-radius: 999px; padding: 4px 12px; font-size: .85rem; letter-spacing: .02em;
+}
+
+/* Blocos de alternativa: a letra sempre acompanha a cor */
+.opt-a { --opt: var(--a); --on-opt: #fff; }
+.opt-b { --opt: var(--b); --on-opt: #fff; }
+.opt-c { --opt: var(--c); --on-opt: var(--ink); }
+.opt-d { --opt: var(--d); --on-opt: #fff; }
+.letter {
+  display: inline-grid; place-items: center; flex: none;
+  width: 1.9em; height: 1.9em; border-radius: 8px;
+  background: rgba(255,255,255,.22); font-family: var(--display); font-weight: 800;
+}
+.opt-c .letter { background: rgba(20,22,26,.12); }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); background: var(--ink); color: var(--paper);
+  padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 50;
+  max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0,0,0,.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

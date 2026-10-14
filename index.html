@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiz ao Vivo</title>
+<meta name="description" content="Entre no quiz com o PIN mostrado no telão.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  body { display: flex; flex-direction: column; min-height: 100%; }
+  .bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    border-bottom: 2px solid var(--ink);
+  }
+  .bar .who { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .pts { font-family: var(--display); font-weight: 800; font-size: 1.15rem; white-space: nowrap; }
+  main {
+    flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 560px; margin: 0 auto;
+    padding-block: 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    gap: 18px;
+  }
+  .center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 14px; }
+
+  /* entrada */
+  .brand { font-family: var(--display); font-weight: 800; font-size: clamp(2.6rem, 12vw, 4rem); line-height: .9; letter-spacing: -0.03em; }
+  .brand span { display: block; color: var(--a); }
+  form.join { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+  .pin-input { font-family: var(--display); font-size: 2rem; font-weight: 800; letter-spacing: .25em; text-align: center; }
+  .err { color: var(--bad); font-weight: 600; min-height: 1.4em; }
+
+  .big-num { font-family: var(--display); font-weight: 800; font-size: clamp(5rem, 34vw, 9rem); line-height: .9; }
+  .muted { color: var(--muted); }
+  .qmeta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .qtext { font-family: var(--display); font-weight: 700; font-size: clamp(1.3rem, 5.6vw, 1.75rem); line-height: 1.15; }
+  .timer { height: 10px; background: var(--soft); border-radius: 99px; overflow: hidden; }
+  .timer > i { display: block; height: 100%; background: var(--ink); width: 100%; transform-origin: left; }
+  .secs { font-family: var(--display); font-weight: 800; font-size: 1.4rem; }
+
+  .opts { display: grid; grid-template-columns: 1fr; gap: 12px; flex: 1; }
+  .opts.two { grid-template-rows: 1fr 1fr; }
+  .opt {
+    display: flex; align-items: center; gap: 14px; text-align: left;
+    min-height: 76px; padding: 14px 16px; border: 0; border-radius: var(--r);
+    background: var(--opt); color: var(--on-opt); font-weight: 700; font-size: 1.1rem; cursor: pointer;
+    box-shadow: 0 4px 0 rgba(20,22,26,.25);
+  }
+  .opt:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(20,22,26,.25); }
+  .opt .t { min-width: 0; overflow-wrap: anywhere; }
+
+  .result { border-radius: var(--r); padding: 28px 20px; color: #fff; text-align: center; display: flex; flex-direction: column; gap: 6px; width: 100%; }
+  .result.good { background: var(--good); }
+  .result.bad { background: var(--bad); }
+  .result.none { background: var(--muted); }
+  .result h2 { font-size: 2.4rem; }
+  .result .plus { font-family: var(--display); font-weight: 800; font-size: 1.8rem; }
+  .stand { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+  .stand div { background: var(--card); border: 2px solid var(--ink); border-radius: var(--r); padding: 14px; text-align: center; }
+  .stand b { display: block; font-family: var(--display); font-size: 2rem; line-height: 1.1; }
+  .chosen { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r); background: var(--opt); color: var(--on-opt); font-weight: 700; width: 100%; text-align: left; }
+  .pulse { width: 14px; height: 14px; border-radius: 50%; background: var(--ink); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+  .net { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--bad); color: #fff; padding: 6px 12px; border-radius: 99px; font-size: .85rem; font-weight: 700; z-index: 40; }
+  .linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 4px; }
+</style>
+</head>
+<body>
+<header class="bar" id="bar" hidden>
+  <div class="who" id="who"></div>
+  <div class="pts" id="pts">0 pts</div>
+</header>
+<div class="net" id="net" hidden>Reconectando…</div>
+<main id="app"></main>
+
+<script src="common.js"></script>
+<script>
+const app = document.getElementById('app');
+const S = {
+  me: Store.get('quiz.player'),
+  data: null,
+  pending: null,       // {q, choice} resposta enviada e ainda não confirmada pelo servidor
+  lockedOut: null,     // índice da pergunta em que o servidor recusou por tempo
+  viewKey: '',
+  failSince: 0,
+  timer: null
+};
+
+function toast(msg) {
+  const t = el('div', { class: 'toast', role: 'status', text: msg });
+  document.body.append(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+// ---------- entrada ----------
+function renderJoin(errMsg) {
+  document.getElementById('bar').hidden = true;
+  const params = new URLSearchParams(location.search);
+  const pinPre = (params.get('pin') || '').replace(/\D/g, '').slice(0, 6);
+  const pin = el('input', { class: 'input pin-input', id: 'pin', inputmode: 'numeric', autocomplete: 'off', maxlength: '6', placeholder: '000000', 'aria-label': 'PIN da sessão', value: pinPre });
+  const name = el('input', { class: 'input', id: 'name', maxlength: '20', autocomplete: 'nickname', placeholder: 'Como você quer aparecer no telão', 'aria-label': 'Seu nome' });
+  const err = el('div', { class: 'err', role: 'alert', text: errMsg || '' });
+  const btn = el('button', { class: 'btn big', type: 'submit', text: 'Entrar' });
+  pin.addEventListener('input', () => { pin.value = pin.value.replace(/\D/g, '').slice(0, 6); });
+  const form = el('form', { class: 'join', novalidate: true },
+    el('label', { class: 'label', for: 'pin', text: 'PIN da sessão' }), pin,
+    el('label', { class: 'label', for: 'name', text: 'Seu nome' }), name,
+    err, btn);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const p = pin.value.trim(), n = name.value.trim();
+    if (p.length !== 6) { err.textContent = 'O PIN tem 6 números. Confira no telão.'; pin.focus(); return; }
+    if (!n) { err.textContent = 'Escreva um nome pra aparecer no ranking.'; name.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Entrando…'; err.textContent = '';
+    try {
+      const r = await Api.rpc('join_session', { p_pin: p, p_name: n });
+      S.me = { player_id: r.player_id, secret: r.secret, name: r.name, pin: p };
+      Store.set('quiz.player', S.me);
+      history.replaceState(null, '', location.pathname);
+      startPolling();
+    } catch (ex) {
+      err.textContent = ex.message;
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+  app.replaceChildren(el('div', { class: 'center' },
+    el('h1', { class: 'brand' }, 'Quiz', el('span', { text: 'ao vivo' })),
+    el('p', { class: 'muted', text: 'Digite o PIN que aparece no telão e escolha um nome.' }),
+    form));
+  S.viewKey = 'join';
+  (pinPre ? name : pin).focus();
+}
+
+function leave() {
+  Store.del('quiz.player');
+  S.me = null; S.data = null; S.pending = null;
+  clearTimeout(S.timer);
+  renderJoin();
+}
+
+// ---------- polling ----------
+async function poll() {
+  if (!S.me) return;
+  try {
+    const d = await Clock.timed('player_poll', { p_player: S.me.player_id, p_secret: S.me.secret });
+    S.failSince = 0;
+    document.getElementById('net').hidden = true;
+    if (S.data && d.q_index !== S.data.q_index) { S.pending = null; S.lockedOut = null; }
+    S.data = d;
+    render();
+  } catch (e) {
+    if (e.status && /não encontrado/i.test(e.message)) { leave(); toast('Sua entrada expirou. Entre de novo.'); return; }
+    if (!S.failSince) S.failSince = Date.now();
+    if (Date.now() - S.failSince > 4000) document.getElementById('net').hidden = false;
+  }
+  const phase = S.data && S.data.phase;
+  const base = phase === 'lobby' ? 2000 : 1500;
+  S.timer = setTimeout(poll, base + Math.random() * 300);
+}
+function startPolling() {
+  clearTimeout(S.timer);
+  app.replaceChildren(el('div', { class: 'center' }, el('div', { class: 'pulse' }), el('p', { class: 'muted', text: 'Conectando…' })));
+  S.viewKey = 'loading';
+  poll();
+}
+
+// ---------- telas ----------
+function subview(d) {
+  if (d.kicked) return 'kicked';
+  if (!d.open && d.phase !== 'final') return 'closed';
+  if (d.phase === 'question') {
+    const now = Clock.now();
+    if (now < d.starts_at) return 'countdown';
+    const answered = d.my_choice != null || (S.pending && S.pending.q === d.q_index);
+    if (answered) return 'answered';
+    if (S.lockedOut === d.q_index || now > d.ends_at) return 'timeout';
+    return 'answer';
+  }
+  return d.phase;
+}
+
+function render() {
+  const d = S.data;
+  if (!d) return;
+  document.getElementById('bar').hidden = false;
+  document.getElementById('who').textContent = d.name;
+  document.getElementById('pts').textContent = `${fmt(d.score)} pts`;
+  const sv = subview(d);
+  const key = `${sv}:${d.q_index}:${d.phase}`;
+  if (key === S.viewKey) { tick(); return; }
+  S.viewKey = key;
+  const q = d.question;
+  let node;
+  const qLabel = () => el('div', { class: 'qmeta' },
+    el('span', { class: 'label', text: `Pergunta ${d.q_index + 1} de ${d.total_q}` }),
+    q && q.mult > 1 ? el('span', { class: 'bonus', text: q.mult === 2 ? 'Vale o dobro' : 'Vale o triplo' }) : null);
+
+  if (sv === 'kicked') {
+    node = el('div', { class: 'center' }, el('h2', { text: 'Você foi removido da sala' }),
+      el('p', { class: 'muted', text: 'O apresentador tirou esse nome do jogo. Você pode entrar de novo com outro nome.' }),
+      el('button', { class: 'btn', onclick: leave, text: 'Entrar de novo' }));
+  } else if (sv === 'closed') {
+    node = el('div', { class: 'center' }, el('h2', { text: 'Sessão encerrada' }),
+      el('button', { class: 'btn', onclick: leave, text: 'Entrar em outra sessão' }));
+  } else if (sv === 'lobby') {
+    node = el('div', { class: 'center' },
+      el('div', { class: 'pulse' }),
+      el('h2', { style: 'font-size:2rem', text: `Você está dentro, ${d.name}!` }),
+      el('p', { class: 'muted', text: 'Seu nome já aparece no telão. Aguarde o apresentador começar.' }),
+      el('p', { class: 'label', id: 'pcount', text: `${d.players} na sala` }),
+      el('button', { class: 'linkbtn', onclick: leave, text: 'Sair e trocar de nome' }));
+  } else if (sv === 'countdown') {
+    node = el('div', { class: 'center' }, qLabel(),
+      el('p', { class: 'muted', text: 'Prepare-se' }),
+      el('div', { class: 'big-num', id: 'cd', text: '' }),
+      q && q.mult > 1 ? el('p', { style: 'font-weight:700', text: `Essa pergunta vale ${q.mult}x os pontos.` }) : null);
+  } else if (sv === 'answer') {
+    const two = q.options.length === 2;
+    node = el('div', { style: 'display:flex;flex-direction:column;gap:14px;flex:1' },
+      qLabel(),
+      el('div', { class: 'qtext', text: q.text }),
+      el('div', { style: 'display:flex;align-items:center;gap:12px' },
+        el('div', { class: 'timer', style: 'flex:1' }, el('i', { id: 'bar-i' })),
+        el('span', { class: 'secs', id: 'secs' })),
+      el('div', { class: 'opts' + (two ? ' two' : '') },
+        q.options.map((o, i) => el('button', {
+          class: `opt opt-${'abcd'[i]}`, 'aria-label': `Alternativa ${LETTERS[i]}: ${o}`,
+          onclick: () => answer(i)
+        }, el('span', { class: 'letter', text: LETTERS[i] }), el('span', { class: 't', text: o })))));
+  } else if (sv === 'answered') {
+    const c = d.my_choice != null ? d.my_choice : S.pending.choice;
+    node = el('div', { class: 'center' }, qLabel(),
+      el('div', { class: 'pulse' }),
+      el('h2', { style: 'font-size:2rem', text: 'Resposta enviada' }),
+      el('div', { class: `chosen opt-${'abcd'[c]}` }, el('span', { class: 'letter', text: LETTERS[c] }), el('span', { text: q.options[c] })),
+      el('p', { class: 'muted', text: 'Aguarde o resultado no telão.' }));
+  } else if (sv === 'timeout') {
+    node = el('div', { class: 'center' }, qLabel(), el('h2', { style: 'font-size:2.2rem', text: 'Tempo esgotado' }),
+      el('p', { class: 'muted', text: 'Aguarde a próxima pergunta.' }));
+  } else if (sv === 'reveal' || sv === 'leaderboard') {
+    let res;
+    if (d.my_choice == null) {
+      res = el('div', { class: 'result none' }, el('h2', { text: 'Sem resposta' }), el('div', { text: `Resposta certa: ${LETTERS[d.correct]} · ${q.options[d.correct]}` }));
+    } else if (d.my_correct) {
+      res = el('div', { class: 'result good' }, el('h2', { text: 'Acertou!' }), el('div', { class: 'plus', text: `+${fmt(d.my_points)}` }));
+    } else {
+      res = el('div', { class: 'result bad' }, el('h2', { text: 'Errou' }), el('div', { text: `Resposta certa: ${LETTERS[d.correct]} · ${q.options[d.correct]}` }));
+    }
+    node = el('div', { class: 'center' }, qLabel(), res,
+      el('div', { class: 'stand' },
+        el('div', {}, el('span', { class: 'label', text: 'Pontos' }), el('b', { text: fmt(d.score) })),
+        el('div', {}, el('span', { class: 'label', text: 'Posição' }), el('b', { text: d.rank ? `${d.rank}º` : '—' }), el('span', { class: 'muted', text: `de ${d.players}` }))),
+      el('p', { class: 'muted', text: d.q_index + 1 < d.total_q ? 'A próxima pergunta já vem.' : 'Essa foi a última pergunta.' }));
+  } else if (sv === 'final') {
+    const podium = d.rank && d.rank <= 3;
+    node = el('div', { class: 'center' },
+      el('span', { class: 'label', text: 'Resultado final' }),
+      el('div', { class: 'big-num', text: d.rank ? `${d.rank}º` : '—' }),
+      el('h2', { style: 'font-size:1.8rem', text: podium ? 'Você está no pódio!' : `de ${d.players} participantes` }),
+      el('div', { class: 'stand', style: 'grid-template-columns:1fr' },
+        el('div', {}, el('span', { class: 'label', text: 'Pontuação final' }), el('b', { text: fmt(d.score) }))),
+      el('button', { class: 'linkbtn', onclick: leave, text: 'Sair' }));
+  } else {
+    node = el('div', { class: 'center' }, el('div', { class: 'pulse' }));
+  }
+  app.replaceChildren(node);
+  tick();
+}
+
+function tick() {
+  const d = S.data;
+  if (!d || d.phase !== 'question') return;
+  const now = Clock.now();
+  // troca de sub-tela por tempo (contagem -> resposta -> esgotado) sem esperar o próximo poll
+  const sv = subview(d);
+  if (`${sv}:${d.q_index}:${d.phase}` !== S.viewKey) { render(); return; }
+  const cd = document.getElementById('cd');
+  if (cd) cd.textContent = Math.max(1, Math.ceil((d.starts_at - now) / 1000));
+  const bar = document.getElementById('bar-i');
+  if (bar) {
+    const total = d.ends_at - d.starts_at;
+    const left = Math.max(0, d.ends_at - now);
+    bar.style.transform = `scaleX(${left / total})`;
+    document.getElementById('secs').textContent = Math.ceil(left / 1000);
+  }
+}
+setInterval(tick, 100);
+
+async function answer(choice) {
+  const d = S.data;
+  if (!d || S.pending) return;
+  const q = d.q_index;
+  S.pending = { q, choice };
+  render();
+  try {
+    await Api.rpc('submit_answer', { p_player: S.me.player_id, p_secret: S.me.secret, p_q: q, p_choice: choice });
+  } catch (e) {
+    if (/já respondeu/i.test(e.message)) return;
+    if (e.network) {
+      // uma nova tentativa rápida antes de desistir
+      try { await Api.rpc('submit_answer', { p_player: S.me.player_id, p_secret: S.me.secret, p_q: q, p_choice: choice }); return; }
+      catch (e2) { if (/já respondeu/i.test(e2.message)) return; e = e2; }
+    }
+    S.pending = null;
+    if (/esgotado|encerrada/i.test(e.message)) S.lockedOut = q;
+    toast(e.message);
+    render();
+  }
+}
+
+{
+  const urlPin = (new URLSearchParams(location.search).get('pin') || '').replace(/\D/g, '');
+  if (S.me && urlPin && urlPin !== S.me.pin) { Store.del('quiz.player'); S.me = null; }
+  if (S.me) startPolling(); else renderJoin();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiz ao Vivo · Apresentador</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  /* ================= EDITOR ================= */
+  .ed-top {
+    position: sticky; top: 0; z-index: 20; background: var(--paper);
+    border-bottom: 2px solid var(--ink);
+    padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .ed-top .row { max-width: 920px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .logo { font-family: var(--display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.02em; margin-right: auto; }
+  .logo span { color: var(--a); }
+  .status { font-size: .85rem; color: var(--muted); min-width: 70px; }
+  .status.err { color: var(--bad); font-weight: 600; }
+  .ed {
+    max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px;
+    padding-block: 24px 80px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .title-in {
+    font-family: var(--display); font-weight: 800; font-size: clamp(1.8rem, 5vw, 2.6rem);
+    border: 0; border-bottom: 2px dashed var(--line); background: transparent; padding: 4px 0; width: 100%; outline: none;
+  }
+  .title-in:focus { border-bottom-color: var(--ink); }
+  .summary { display: flex; gap: 8px 18px; flex-wrap: wrap; color: var(--muted); font-size: .95rem; }
+  .summary b { color: var(--ink); }
+  .live-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--ink); color: var(--paper); border-radius: var(--r); padding: 14px 18px; }
+
+  .qcard { background: var(--card); border: 2px solid var(--line); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .qcard.bad { border-color: var(--bad); }
+  .qcard.is-bonus { border-color: var(--bonus); box-shadow: inset 6px 0 0 var(--bonus); }
+  .qhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .qnum { font-family: var(--display); font-weight: 800; font-size: 1.3rem; margin-right: auto; }
+  .tools { display: inline-flex; gap: 6px; }
+  .seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; padding: 7px 12px; font-weight: 600; font-size: .85rem; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .sel { border: 2px solid var(--line); border-radius: 10px; padding: 7px 10px; background: var(--card); font-weight: 600; font-size: .9rem; }
+  .icon-btn { border: 2px solid var(--line); background: var(--card); border-radius: 10px; width: 36px; height: 36px; display: inline-grid; place-items: center; cursor: pointer; font-weight: 700; }
+  .icon-btn:hover { border-color: var(--ink); }
+  .icon-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .qtext-in { resize: vertical; min-height: 64px; font-size: 1.1rem; font-weight: 600; }
+  .opt-row { display: flex; align-items: center; gap: 10px; }
+  .opt-row .tile { width: 40px; height: 40px; border-radius: 10px; background: var(--opt); color: var(--on-opt); display: grid; place-items: center; font-family: var(--display); font-weight: 800; flex: none; }
+  .opt-row .input { flex: 1; min-width: 0; padding: 9px 12px; }
+  .opt-row.correct .input { border-color: var(--good); background: #EAF5F1; }
+  .correct-btn { border: 2px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 10px; font-size: .8rem; font-weight: 700; cursor: pointer; white-space: nowrap; color: var(--muted); }
+  .opt-row.correct .correct-btn { background: var(--good); border-color: var(--good); color: #fff; }
+  .opts-ed { display: flex; flex-direction: column; gap: 8px; }
+  .problem { color: var(--bad); font-weight: 600; font-size: .9rem; }
+  .add-q { border: 2px dashed var(--ink); background: transparent; border-radius: var(--r); padding: 18px; font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+  .add-q:hover { background: var(--card); }
+  .hint { color: var(--muted); font-size: .9rem; }
+
+  /* ================= AO VIVO ================= */
+  #root { min-height: 100%; display: flex; flex-direction: column; }
+  .stage {
+    flex: 1; min-height: 100%; display: flex; flex-direction: column;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    gap: 2vh;
+  }
+  .strip { display: flex; align-items: center; gap: 14px 24px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
+  .strip .join { font-size: clamp(1rem, 1.6vw, 1.4rem); }
+  .strip .join b { font-family: var(--display); }
+  .strip .spacer { flex: 1; }
+  .strip .ctrl { display: flex; gap: 8px; }
+  .body { flex: 1; display: flex; flex-direction: column; gap: 2.4vh; min-height: 0; }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .foot .keys { color: var(--muted); font-size: .85rem; }
+
+  /* lobby */
+  .lobby { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 4vw; align-items: center; flex: 1; }
+  .lobby .howto { display: flex; flex-direction: column; gap: 2vh; }
+  .lobby .url { font-family: var(--display); font-weight: 700; font-size: clamp(1.4rem, 3.2vw, 3rem); overflow-wrap: anywhere; line-height: 1.05; }
+  .lobby .pin { font-family: var(--display); font-weight: 800; font-size: clamp(3.4rem, 8.6vw, 9.5rem); line-height: .9; letter-spacing: .02em; white-space: nowrap; }
+  .qr { width: min(34vh, 100%); aspect-ratio: 1; background: #fff; border: 2px solid var(--ink); border-radius: var(--r); padding: 10px; justify-self: center; max-width: 100%; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .people { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; max-height: 32vh; overflow: auto; }
+  .chip { border: 2px solid var(--ink); border-radius: 999px; padding: 6px 14px; font-weight: 700; background: var(--card); cursor: pointer; animation: pop .25s ease; }
+  .chip.confirm { background: var(--bad); border-color: var(--bad); color: #fff; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+  .count { font-family: var(--display); font-weight: 800; font-size: clamp(1.4rem, 2.6vw, 2.2rem); }
+
+  /* pergunta */
+  .qtop { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .q-big { font-family: var(--display); font-weight: 700; font-size: clamp(1.8rem, 4.4vw, 4.2rem); line-height: 1.05; text-wrap: balance; }
+  .q-mid { display: flex; align-items: center; justify-content: space-between; gap: 2vw; flex-wrap: wrap; }
+  .clock { width: clamp(90px, 13vh, 150px); aspect-ratio: 1; position: relative; flex: none; }
+  .clock svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .clock .n { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 5vh, 3.6rem); }
+  .answered { text-align: right; }
+  .answered b { font-family: var(--display); font-weight: 800; font-size: clamp(2.4rem, 7vh, 5rem); line-height: 1; display: block; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6vh; flex: 1; min-height: 0; }
+  .tileo {
+    position: relative; overflow: hidden; display: flex; align-items: center; gap: 1.4vw;
+    border-radius: var(--r); padding: 2vh 2vw; background: var(--opt); color: var(--on-opt);
+    font-weight: 700; font-size: clamp(1.1rem, 2.4vw, 2.2rem); min-height: 12vh;
+  }
+  .tileo .letter { font-size: 1em; }
+  .tileo .t { min-width: 0; overflow-wrap: anywhere; position: relative; }
+  .tileo.dim { opacity: .28; }
+  .tileo .cnt { margin-left: auto; font-family: var(--display); font-weight: 800; position: relative; white-space: nowrap; }
+  .tileo .fill { position: absolute; inset: 0; background: rgba(20,22,26,.18); transform-origin: left; transform: scaleX(0); transition: transform .9s cubic-bezier(.2,.8,.2,1); }
+  .tileo .ok { position: relative; background: #fff; color: var(--good); border-radius: 999px; padding: 2px 12px; font-size: .55em; font-weight: 800; white-space: nowrap; }
+  .countdown { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 3vh; }
+  .countdown .n { font-family: var(--display); font-weight: 800; font-size: clamp(6rem, 26vh, 16rem); line-height: .85; }
+
+  /* ranking */
+  .board { display: flex; flex-direction: column; gap: 1.2vh; width: min(1000px, 100%); margin: 0 auto; }
+  .brow { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto auto; align-items: center; gap: 1.6vw; background: var(--card); border: 2px solid var(--ink); border-radius: var(--r); padding: 1.4vh 1.8vw; font-size: clamp(1.1rem, 2.4vw, 2rem); animation: slide .4s ease both; }
+  .brow .pos { font-family: var(--display); font-weight: 800; }
+  .brow .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brow .sc { font-family: var(--display); font-weight: 800; }
+  .brow .mv { font-size: .7em; font-weight: 700; min-width: 3.4em; text-align: right; }
+  .mv.up { color: var(--good); } .mv.down { color: var(--bad); } .mv.same { color: var(--muted); }
+  .brow .gain { font-size: .6em; color: var(--muted); font-weight: 600; margin-left: .6em; }
+  @keyframes slide { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* pódio */
+  .podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 2vw; width: min(1000px, 100%); margin: 0 auto; flex: 1; }
+  .step { display: flex; flex-direction: column; align-items: center; gap: 1vh; text-align: center; min-width: 0; }
+  .step .nm { font-family: var(--display); font-weight: 800; font-size: clamp(1.2rem, 3vw, 2.6rem); overflow-wrap: anywhere; line-height: 1.05; }
+  .step .sc { font-weight: 700; font-size: clamp(1rem, 1.8vw, 1.5rem); }
+  .step .blk { width: 100%; border-radius: var(--r) var(--r) 0 0; display: grid; place-items: start center; padding-top: 1.4vh; font-family: var(--display); font-weight: 800; font-size: clamp(2.4rem, 7vh, 5rem); color: #fff; animation: rise .8s cubic-bezier(.2,.8,.2,1) both; transform-origin: bottom; }
+  .step.p1 .blk { background: var(--c); color: var(--ink); height: 30vh; animation-delay: .9s; }
+  .step.p2 .blk { background: var(--d); height: 21vh; animation-delay: .45s; }
+  .step.p3 .blk { background: var(--a); height: 14vh; }
+  @keyframes rise { from { transform: scaleY(0); } to { transform: none; } }
+  .rest { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; color: var(--muted); font-weight: 600; }
+
+  @media (max-width: 760px) {
+    .lobby { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; }
+    .brow { grid-template-columns: 2.4em minmax(0, 1fr) auto; }
+    .brow .mv { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="qrcode.js"></script>
+<script src="common.js"></script>
+<script>
+const root = document.getElementById('root');
+function toast(msg) {
+  const t = el('div', { class: 'toast', role: 'status', text: msg });
+  document.body.append(t);
+  setTimeout(() => t.remove(), 3500);
+}
+const uid = () => Math.random().toString(36).slice(2, 10);
+const TIMES = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+
+function exampleQuestions() {
+  return [
+    { _id: uid(), type: 'mc', text: 'Exemplo: qual é a capital de Minas Gerais?', options: ['Uberlândia', 'Belo Horizonte', 'Juiz de Fora', 'Ouro Preto'], correct: 1, time: 20, mult: 1 },
+    { _id: uid(), type: 'tf', text: 'Exemplo: o Brasil tem 26 estados e um Distrito Federal.', options: ['Verdadeiro', 'Falso'], correct: 0, time: 15, mult: 1 },
+    { _id: uid(), type: 'mc', text: 'Exemplo (vale o dobro): em que ano foi criado o SUS?', options: ['1978', '1985', '1988', '1994'], correct: 2, time: 30, mult: 2 }
+  ];
+}
+
+// ================= ESTADO =================
+const E = {
+  quiz: null,          // {id, key, title, questions}
+  dirty: false,
+  saving: false,
+  saveTimer: null,
+  status: '',
+  problems: {}         // _id -> mensagem
+};
+const L = {            // ao vivo
+  sid: null, hk: null, data: null, viewKey: '', timer: null,
+  revealAsked: -1, failSince: 0, confirmKick: null, busy: false
+};
+
+// ================= ARMAZENAMENTO LOCAL =================
+function myQuizzes() { return Store.get('quiz.mine', []); }
+function rememberQuiz(q) {
+  const list = myQuizzes().filter(x => x.id !== q.id);
+  list.unshift({ id: q.id, key: q.key, title: q.title });
+  Store.set('quiz.mine', list.slice(0, 30));
+  Store.set('quiz.current', q.id);
+}
+function cacheDraft() { if (E.quiz) Store.set('quiz.draft.' + (E.quiz.id || 'new'), stripIds(E.quiz)); }
+function stripIds(q) {
+  return { id: q.id, key: q.key, title: q.title, questions: q.questions.map(stripOne) };
+}
+function withIds(qs) { return (qs || []).map(q => ({ _id: uid(), ...q })); }
+
+// ================= EDITOR =================
+async function openEditor() {
+  stopLive();
+  const h = location.hash;
+  let target = null;
+  const m = h.match(/^#q=([0-9a-f-]{36})\.([0-9a-f-]{36})$/i);
+  if (m) target = { id: m[1], key: m[2] };
+  else {
+    const cur = Store.get('quiz.current');
+    target = myQuizzes().find(x => x.id === cur) || null;
+  }
+  if (target) {
+    renderLoading('Abrindo quiz…');
+    try {
+      const r = await Api.rpc('get_quiz', { p_quiz: target.id, p_key: target.key });
+      E.quiz = { id: r.id, key: target.key, title: r.title, questions: withIds(r.questions) };
+      rememberQuiz(E.quiz);
+    } catch (e) {
+      const draft = Store.get('quiz.draft.' + target.id);
+      if (draft && e.network) {
+        E.quiz = { ...draft, questions: withIds(draft.questions) };
+        toast('Sem conexão: abrindo a última cópia salva neste aparelho.');
+      } else {
+        toast(e.network ? 'Sem conexão com o servidor.' : 'Não achei esse quiz. Abrindo um novo.');
+        E.quiz = newQuiz();
+      }
+    }
+  } else {
+    E.quiz = newQuiz();
+  }
+  if (m) history.replaceState(null, '', location.pathname);
+  E.status = E.quiz.id ? 'Salvo' : '';
+  renderEditor();
+}
+function newQuiz() { return { id: null, key: null, title: 'Meu quiz', questions: exampleQuestions() }; }
+
+function changed() {
+  E.dirty = true;
+  E.status = 'Editando…';
+  updateStatus();
+  updateSummary();
+  cacheDraft();
+  clearTimeout(E.saveTimer);
+  E.saveTimer = setTimeout(save, 900);
+}
+async function save() {
+  if (E.saving) { clearTimeout(E.saveTimer); E.saveTimer = setTimeout(save, 500); return true; }
+  if (!E.dirty && E.quiz.id) return true;
+  E.saving = true; E.dirty = false;
+  E.status = 'Salvando…'; updateStatus();
+  const payload = stripIds(E.quiz);
+  try {
+    if (!E.quiz.id) {
+      const r = await Api.rpc('create_quiz', { p_title: payload.title, p_questions: payload.questions });
+      E.quiz.id = r.id; E.quiz.key = r.key;
+    } else {
+      await Api.rpc('save_quiz', { p_quiz: E.quiz.id, p_key: E.quiz.key, p_title: payload.title, p_questions: payload.questions });
+    }
+    rememberQuiz(E.quiz);
+    cacheDraft();
+    E.status = 'Salvo';
+    renderQuizPicker();
+    return true;
+  } catch (e) {
+    E.dirty = true;
+    E.status = e.network ? 'Sem conexão. Vou tentar de novo.' : 'Erro ao salvar: ' + e.message;
+    clearTimeout(E.saveTimer); E.saveTimer = setTimeout(save, 4000);
+    return false;
+  } finally {
+    E.saving = false; updateStatus();
+  }
+}
+function updateStatus() {
+  const s = document.getElementById('status');
+  if (!s) return;
+  s.textContent = E.status;
+  s.className = 'status' + (/Erro|Sem conexão/.test(E.status) ? ' err' : '');
+}
+
+function validate(q) {
+  if (!q.text.trim()) return 'Escreva o texto da pergunta.';
+  if (q.options.some(o => !o.trim())) return 'Preencha todas as alternativas.';
+  if (q.correct == null || q.correct < 0 || q.correct >= q.options.length) return 'Marque qual alternativa é a correta.';
+  return null;
+}
+
+function updateSummary() {
+  const s = document.getElementById('summary');
+  if (!s) return;
+  const qs = E.quiz.questions;
+  const bonus = qs.filter(q => q.mult > 1).length;
+  const secs = qs.reduce((a, q) => a + q.time + 15, 0);
+  const max = qs.reduce((a, q) => a + 1000 * q.mult, 0);
+  s.replaceChildren(
+    el('span', {}, el('b', { text: qs.length }), qs.length === 1 ? ' pergunta' : ' perguntas'),
+    el('span', {}, el('b', { text: bonus }), bonus === 1 ? ' com bônus' : ' com bônus'),
+    el('span', {}, 'cerca de ', el('b', { text: Math.max(1, Math.round(secs / 60)) }), ' min de jogo'),
+    el('span', {}, 'máximo de ', el('b', { text: fmt(max) }), ' pontos'));
+}
+
+function renderQuizPicker() {
+  const host = document.getElementById('picker');
+  if (!host) return;
+  const list = myQuizzes();
+  const sel = el('select', { class: 'sel', id: 'quiz-picker', 'aria-label': 'Escolher quiz' },
+    list.map(x => el('option', { value: x.id, selected: E.quiz && x.id === E.quiz.id, text: x.title || 'Sem título' })),
+    !E.quiz.id ? el('option', { value: '', selected: true, text: 'Novo quiz (não salvo)' }) : null,
+    el('option', { value: '__new', text: '+ Novo quiz' }));
+  sel.addEventListener('change', async () => {
+    await save();
+    if (sel.value === '__new') { E.quiz = newQuiz(); E.status = ''; Store.del('quiz.current'); renderEditor(); return; }
+    if (!sel.value) return;
+    Store.set('quiz.current', sel.value);
+    openEditor();
+  });
+  host.replaceChildren(sel);
+}
+
+function renderEditor() {
+  const q = E.quiz;
+  const live = Store.get('quiz.live');
+  const titleIn = el('input', { class: 'title-in', id: 'quiz-title', value: q.title, maxlength: '80', 'aria-label': 'Nome do quiz' });
+  titleIn.addEventListener('input', () => { q.title = titleIn.value; changed(); });
+
+  const list = el('div', { id: 'qlist', style: 'display:flex;flex-direction:column;gap:14px' });
+  q.questions.forEach((qq, i) => list.append(questionCard(qq, i)));
+
+  const addBtn = el('button', { class: 'add-q', onclick: () => {
+    q.questions.push({ _id: uid(), type: 'mc', text: '', options: ['', '', '', ''], correct: 0, time: 20, mult: 1 });
+    changed(); rerenderList();
+    const last = document.querySelector('#qlist .qcard:last-child textarea'); if (last) last.focus();
+  } }, '+ Adicionar pergunta');
+
+  root.replaceChildren(
+    el('header', { class: 'ed-top' }, el('div', { class: 'row' },
+      el('div', { class: 'logo' }, 'Quiz ', el('span', { text: 'ao vivo' })),
+      el('div', { id: 'picker' }),
+      el('span', { class: 'status', id: 'status', 'aria-live': 'polite' }),
+      el('button', { class: 'btn ghost small', onclick: copyEditLink, text: 'Copiar link de edição' }),
+      el('button', { class: 'btn', id: 'start-btn', onclick: startLive, text: 'Iniciar ao vivo' }))),
+    el('main', { class: 'ed' },
+      live ? el('div', { class: 'live-banner' },
+        el('span', {}, 'Tem uma sessão ao vivo aberta (PIN ', el('b', { text: live.pin || '…' }), ').'),
+        el('button', { class: 'btn small', style: 'background:var(--paper);color:var(--ink);border-color:var(--paper)', onclick: () => resumeLive(live), text: 'Voltar pra sessão' })) : null,
+      titleIn,
+      el('div', { class: 'summary', id: 'summary' }),
+      el('p', { class: 'hint', text: 'Tudo é salvo automaticamente. Na sessão, cada pergunta vale até 1.000 pontos (ou 2.000 / 3.000 com bônus): quem acerta mais rápido ganha mais, e acerto em menos de meio segundo leva o máximo.' }),
+      list,
+      addBtn));
+  renderQuizPicker(); updateStatus(); updateSummary();
+}
+function rerenderList() {
+  const list = document.getElementById('qlist');
+  list.replaceChildren(...E.quiz.questions.map((qq, i) => questionCard(qq, i)));
+}
+
+function questionCard(qq, i) {
+  const qs = E.quiz.questions;
+  const card = el('section', { class: 'qcard' + (qq.mult > 1 ? ' is-bonus' : '') + (E.problems[qq._id] ? ' bad' : ''), 'data-id': qq._id });
+
+  const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Tipo de pergunta' },
+    el('button', { type: 'button', 'aria-pressed': String(qq.type === 'mc'), onclick: () => setType('mc'), text: 'Múltipla escolha' }),
+    el('button', { type: 'button', 'aria-pressed': String(qq.type === 'tf'), onclick: () => setType('tf'), text: 'Verdadeiro ou falso' }));
+  function setType(t) {
+    if (qq.type === t) return;
+    if (t === 'tf') { qq._mcBackup = qq.options; qq.options = ['Verdadeiro', 'Falso']; qq.correct = Math.min(qq.correct, 1); }
+    else { qq.options = qq._mcBackup || ['', '', '', '']; qq.correct = Math.min(qq.correct, qq.options.length - 1); }
+    qq.type = t; changed(); rerenderList();
+  }
+
+  const time = el('select', { class: 'sel', 'aria-label': 'Tempo para responder' },
+    TIMES.map(t => el('option', { value: t, selected: qq.time === t, text: `${t} s` })));
+  time.addEventListener('change', () => { qq.time = +time.value; changed(); });
+
+  const mult = el('select', { class: 'sel', 'aria-label': 'Pontos' },
+    [[1, 'Pontos normais'], [2, 'Vale o dobro'], [3, 'Vale o triplo']].map(([v, t]) => el('option', { value: v, selected: qq.mult === v, text: t })));
+  mult.addEventListener('change', () => { qq.mult = +mult.value; card.classList.toggle('is-bonus', qq.mult > 1); changed(); });
+
+  const move = (d) => { const j = i + d; [qs[i], qs[j]] = [qs[j], qs[i]]; changed(); rerenderList(); };
+  const head = el('div', { class: 'qhead' },
+    el('span', { class: 'qnum', text: `Pergunta ${i + 1}` }),
+    seg, time, mult,
+    el('span', { class: 'tools' },
+    el('button', { class: 'icon-btn', title: 'Subir', 'aria-label': 'Subir pergunta', disabled: i === 0, onclick: () => move(-1) }, '↑'),
+    el('button', { class: 'icon-btn', title: 'Descer', 'aria-label': 'Descer pergunta', disabled: i === qs.length - 1, onclick: () => move(1) }, '↓'),
+    el('button', { class: 'icon-btn', title: 'Duplicar', 'aria-label': 'Duplicar pergunta', onclick: () => { qs.splice(i + 1, 0, { ...structuredClone(stripOne(qq)), _id: uid() }); changed(); rerenderList(); } }, '⧉'),
+    delBtn()));
+  function delBtn() {
+    const b = el('button', { class: 'icon-btn', title: 'Apagar', 'aria-label': 'Apagar pergunta' }, '✕');
+    let armed = false;
+    b.addEventListener('click', () => {
+      if (!armed) { armed = true; b.textContent = 'Apagar?'; b.style.width = 'auto'; b.style.padding = '0 10px'; b.style.color = 'var(--bad)'; setTimeout(() => { if (armed) { armed = false; b.textContent = '✕'; b.removeAttribute('style'); } }, 2500); return; }
+      qs.splice(i, 1); delete E.problems[qq._id]; changed(); rerenderList();
+    });
+    return b;
+  }
+
+  const txt = el('textarea', { class: 'input qtext-in', rows: '2', maxlength: '300', placeholder: 'Escreva a pergunta', 'aria-label': `Texto da pergunta ${i + 1}` });
+  txt.value = qq.text;
+  txt.addEventListener('input', () => { qq.text = txt.value; clearProblem(); changed(); });
+
+  const opts = el('div', { class: 'opts-ed' });
+  function drawOpts() {
+    opts.replaceChildren(...qq.options.map((o, k) => {
+      const inp = el('input', { class: 'input', value: o, maxlength: '120', placeholder: `Alternativa ${LETTERS[k]}`, readonly: qq.type === 'tf', 'aria-label': `Alternativa ${LETTERS[k]}` });
+      inp.addEventListener('input', () => { qq.options[k] = inp.value; clearProblem(); changed(); });
+      const row = el('div', { class: `opt-row opt-${'abcd'[k]}` + (qq.correct === k ? ' correct' : '') },
+        el('span', { class: 'tile', text: LETTERS[k] }), inp,
+        el('button', { type: 'button', class: 'correct-btn', 'aria-pressed': String(qq.correct === k), onclick: () => { qq.correct = k; clearProblem(); changed(); drawOpts(); } }, qq.correct === k ? '✓ Correta' : 'Marcar correta'),
+        qq.type === 'mc' && qq.options.length > 2 ? el('button', { class: 'icon-btn', 'aria-label': `Remover alternativa ${LETTERS[k]}`, onclick: () => {
+          qq.options.splice(k, 1);
+          if (qq.correct === k) qq.correct = 0; else if (qq.correct > k) qq.correct--;
+          changed(); drawOpts();
+        } }, '−') : null);
+      return row;
+    }),
+    qq.type === 'mc' && qq.options.length < 4 ? el('button', { class: 'btn ghost small', style: 'align-self:flex-start', onclick: () => { qq.options.push(''); changed(); drawOpts(); } }, '+ Alternativa') : '');
+  }
+  drawOpts();
+  const prob = el('div', { class: 'problem', text: E.problems[qq._id] || '' });
+  function clearProblem() { if (E.problems[qq._id]) { delete E.problems[qq._id]; prob.textContent = ''; card.classList.remove('bad'); } }
+
+  card.append(head, txt, opts, prob);
+  return card;
+}
+function stripOne(q) { const { _id, _mcBackup, ...r } = q; return r; }
+
+async function copyEditLink() {
+  if (!(await save()) || !E.quiz.id) { toast('Salve o quiz primeiro (precisa de conexão).'); return; }
+  const url = `${location.origin}${location.pathname}#q=${E.quiz.id}.${E.quiz.key}`;
+  try { await navigator.clipboard.writeText(url); toast('Link copiado. Quem tiver esse link pode editar o quiz.'); }
+  catch (_) { prompt('Copie o link de edição:', url); }
+}
+
+// ================= INICIAR AO VIVO =================
+async function startLive() {
+  const qs = E.quiz.questions;
+  E.problems = {};
+  if (!qs.length) { toast('Adicione pelo menos uma pergunta.'); return; }
+  let first = null;
+  qs.forEach(q => { const p = validate(q); if (p) { E.problems[q._id] = p; first = first || q._id; } });
+  if (first) {
+    rerenderList();
+    document.querySelector(`[data-id="${first}"]`).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast('Tem pergunta incompleta. Veja o que está marcado em vermelho.');
+    return;
+  }
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true; btn.textContent = 'Abrindo sala…';
+  E.dirty = true;
+  if (!(await save())) { btn.disabled = false; btn.textContent = 'Iniciar ao vivo'; toast('Não consegui salvar. Confira a conexão.'); return; }
+  try {
+    const r = await Api.rpc('create_session', { p_quiz: E.quiz.id, p_key: E.quiz.key });
+    const live = { sid: r.session_id, hk: r.host_key, pin: r.pin, quiz: E.quiz.id };
+    Store.set('quiz.live', live);
+    resumeLive(live);
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Iniciar ao vivo';
+    toast(e.message);
+  }
+}
+
+// ================= AO VIVO =================
+function joinBase() { return new URL('./', location.href).href; }
+function joinShort() { return joinBase().replace(/^https?:\/\//, '').replace(/\/$/, ''); }
+
+function resumeLive(live) {
+  L.sid = live.sid; L.hk = live.hk; L.data = null; L.viewKey = ''; L.revealAsked = -1;
+  history.replaceState(null, '', `${location.pathname}#s=${live.sid}.${live.hk}`);
+  renderLoading('Conectando à sala…');
+  livePoll();
+}
+function stopLive() { clearTimeout(L.timer); L.sid = null; }
+function backToEditor() {
+  stopLive();
+  history.replaceState(null, '', location.pathname);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  openEditor();
+}
+
+async function livePoll() {
+  if (!L.sid) return;
+  const sid = L.sid;
+  try {
+    const d = await Clock.timed('host_poll', { p_session: L.sid, p_key: L.hk });
+    if (sid !== L.sid) return;
+    L.failSince = 0;
+    L.data = d;
+    const live = Store.get('quiz.live');
+    if (live && live.sid === L.sid && live.pin !== d.pin) Store.set('quiz.live', { ...live, pin: d.pin });
+    renderLive();
+  } catch (e) {
+    if (e.status && /não encontrada/i.test(e.message)) { Store.del('quiz.live'); toast('Essa sessão não existe mais.'); backToEditor(); return; }
+    if (!L.failSince) L.failSince = Date.now();
+    const n = document.getElementById('netwarn');
+    if (n && Date.now() - L.failSince > 3000) n.hidden = false;
+  }
+  L.timer = setTimeout(livePoll, 1000);
+}
+
+async function act(action, arg) {
+  if (L.busy) return;
+  L.busy = true;
+  try {
+    await Api.rpc('host_action', { p_session: L.sid, p_key: L.hk, p_action: action, p_arg: arg || null });
+    clearTimeout(L.timer);
+    await livePoll();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    L.busy = false;
+  }
+}
+
+function liveView(d) {
+  if (d.phase === 'question') return Clock.now() < d.starts_at ? 'countdown' : 'question';
+  return d.phase;
+}
+
+function strip(d, compact) {
+  return el('div', { class: 'strip' },
+    compact ? el('div', { class: 'join' }, 'Entre em ', el('b', { text: joinShort() }), ' · PIN ', el('b', { text: d.pin })) : el('div', { class: 'logo', style: 'margin:0' }, 'Quiz ', el('span', { text: 'ao vivo' })),
+    el('div', { class: 'spacer' }),
+    el('span', { class: 'status err', id: 'netwarn', hidden: true, text: 'Reconectando…' }),
+    el('div', { class: 'ctrl' },
+      el('button', { class: 'btn ghost small', onclick: toggleFs, text: 'Tela cheia' }),
+      el('button', { class: 'btn ghost small', onclick: backToEditor, text: 'Editor' })));
+}
+function toggleFs() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen?.().catch(() => toast('Tela cheia não está disponível aqui. Use F11.'));
+}
+
+function renderLive() {
+  const d = L.data;
+  if (!d) return;
+  const v = liveView(d);
+  const key = `${v}:${d.q_index}`;
+  if (key === L.viewKey) { updateLive(); return; }
+  L.viewKey = key;
+  const q = d.q_index >= 0 ? d.questions[d.q_index] : null;
+  const total = d.questions.length;
+  const isLast = d.q_index + 1 >= total;
+  const qhead = () => el('div', { class: 'qtop' },
+    el('span', { class: 'label', style: 'font-size:clamp(.8rem,1.3vw,1.1rem)', text: `Pergunta ${d.q_index + 1} de ${total}` }),
+    q.mult > 1 ? el('span', { class: 'bonus', style: 'font-size:clamp(.9rem,1.5vw,1.3rem)', text: q.mult === 2 ? 'Vale o dobro' : 'Vale o triplo' }) : null);
+
+  let body, foot;
+  if (!d.open) {
+    body = el('div', { class: 'countdown' }, el('h1', { style: 'font-size:3rem', text: 'Sala encerrada' }), el('p', { class: 'muted', text: 'O PIN não aceita mais participantes.' }));
+    foot = el('div', { class: 'foot' }, el('span'), el('button', { class: 'btn', onclick: () => { Store.del('quiz.live'); backToEditor(); }, text: 'Voltar ao editor' }));
+  } else if (v === 'lobby') {
+    const qrBox = el('div', { class: 'qr', 'aria-label': 'QR code para entrar' });
+    try { const qr = qrcode(0, 'M'); qr.addData(`${joinBase()}?pin=${d.pin}`); qr.make(); qrBox.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); } catch (_) {}
+    body = el('div', { class: 'body' },
+      el('div', { class: 'lobby' },
+        el('div', { class: 'howto' },
+          el('span', { class: 'label', style: 'font-size:clamp(.9rem,1.4vw,1.2rem)', text: 'Entre pelo celular' }),
+          el('div', { class: 'url', text: joinShort() }),
+          el('span', { class: 'label', style: 'font-size:clamp(.9rem,1.4vw,1.2rem)', text: 'PIN da sessão' }),
+          el('div', { class: 'pin', text: d.pin.replace(/(\d{3})(\d{3})/, '$1 $2') })),
+        qrBox),
+      el('div', { style: 'display:flex;align-items:baseline;gap:14px;flex-wrap:wrap' },
+        el('span', { class: 'count', id: 'pcount' }),
+        el('span', { class: 'muted', text: 'Clique num nome pra tirar da sala.' })),
+      el('div', { class: 'people', id: 'people' }));
+    foot = el('div', { class: 'foot' },
+      el('span', { class: 'keys', text: 'Espaço ou Enter avança' }),
+      el('button', { class: 'btn big', id: 'primary', onclick: () => act('next'), text: 'Começar' }));
+  } else if (v === 'countdown') {
+    body = el('div', { class: 'countdown' }, qhead(),
+      el('div', { class: 'q-big', text: q.text }),
+      el('div', { class: 'n', id: 'cd' }));
+    foot = null;
+  } else if (v === 'question') {
+    const R = 44, C = 2 * Math.PI * R;
+    body = el('div', { class: 'body' }, qhead(),
+      el('div', { class: 'q-big', text: q.text }),
+      el('div', { class: 'q-mid' },
+        el('div', { class: 'clock' },
+          svgClock(R, C),
+          el('div', { class: 'n', id: 'secs' })),
+        el('div', { class: 'answered' }, el('b', { id: 'ans' }), el('span', { class: 'label', text: 'respostas' }))),
+      el('div', { class: 'grid' }, q.options.map((o, i) => el('div', { class: `tileo opt-${'abcd'[i]}` },
+        el('span', { class: 'letter', text: LETTERS[i] }), el('span', { class: 't', text: o })))));
+    foot = el('div', { class: 'foot' },
+      el('span', { class: 'keys', text: 'O tempo fecha sozinho, ou quando todo mundo responder' }),
+      el('button', { class: 'btn ghost', onclick: () => act('reveal'), text: 'Encerrar tempo agora' }));
+  } else if (v === 'reveal') {
+    const counts = d.counts || q.options.map(() => 0);
+    const max = Math.max(1, ...counts);
+    const tiles = q.options.map((o, i) => {
+      const fill = el('div', { class: 'fill' });
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.transform = `scaleX(${counts[i] / max})`; }));
+      return el('div', { class: `tileo opt-${'abcd'[i]}` + (i === q.correct ? '' : ' dim') }, fill,
+        el('span', { class: 'letter', text: LETTERS[i] }), el('span', { class: 't', text: o }),
+        i === q.correct ? el('span', { class: 'ok', text: '✓ Correta' }) : null,
+        el('span', { class: 'cnt', text: counts[i] }));
+    });
+    const totalAns = counts.reduce((a, b) => a + b, 0);
+    const right = counts[q.correct] || 0;
+    body = el('div', { class: 'body' }, qhead(),
+      el('div', { class: 'q-big', style: 'font-size:clamp(1.5rem,3.2vw,3rem)', text: q.text }),
+      el('p', { class: 'count', text: totalAns ? `${right} de ${totalAns} acertaram` : 'Ninguém respondeu' }),
+      el('div', { class: 'grid' }, tiles));
+    foot = el('div', { class: 'foot' },
+      el('button', { class: 'btn ghost', onclick: () => act(isLast ? 'final' : 'next'), text: isLast ? 'Pular pro resultado final' : 'Pular ranking' }),
+      el('button', { class: 'btn big', id: 'primary', onclick: () => act('leaderboard'), text: 'Ver ranking' }));
+  } else if (v === 'leaderboard') {
+    const top = d.players.filter(p => p.rank != null).slice(0, 5);
+    const rp = d.round_points || {};
+    body = el('div', { class: 'body' },
+      el('h1', { style: 'font-size:clamp(2rem,5vw,4rem);text-align:center', text: 'Ranking' }),
+      el('p', { class: 'muted', style: 'text-align:center', text: `Depois da pergunta ${d.q_index + 1} de ${total}` }),
+      el('div', { class: 'board' }, top.map((p, i) => {
+        const mv = p.prev_rank == null ? null : p.prev_rank - p.rank;
+        return el('div', { class: 'brow', style: `animation-delay:${i * 0.08}s` },
+          el('span', { class: 'pos', text: `${p.rank}º` }),
+          el('span', { class: 'nm', text: p.name }),
+          el('span', { class: 'sc' }, fmt(p.score), rp[p.id] ? el('span', { class: 'gain', text: `+${fmt(rp[p.id])}` }) : null),
+          el('span', { class: 'mv ' + (mv > 0 ? 'up' : mv < 0 ? 'down' : 'same'), text: mv == null ? '' : mv > 0 ? `▲ ${mv}` : mv < 0 ? `▼ ${-mv}` : '=' }));
+      }),
+      !top.length ? el('p', { class: 'muted', style: 'text-align:center', text: 'Ainda ninguém pontuou.' }) : null));
+    foot = el('div', { class: 'foot' }, el('span', { class: 'keys', text: 'Espaço ou Enter avança' }),
+      el('button', { class: 'btn big', id: 'primary', onclick: () => act(isLast ? 'final' : 'next'), text: isLast ? 'Ver resultado final' : 'Próxima pergunta' }));
+  } else if (v === 'final') {
+    const ranked = d.players.filter(p => p.rank != null);
+    const at = (r) => ranked.filter(p => p.rank === r);
+    const step = (cls, pos, ps) => el('div', { class: `step ${cls}` },
+      el('div', { class: 'nm', text: ps.length ? ps.map(p => p.name).join(' · ') : '—' }),
+      el('div', { class: 'sc', text: ps.length ? `${fmt(ps[0].score)} pts` : '' }),
+      el('div', { class: 'blk', text: `${pos}º` }));
+    // pódio por posição real (empates dividem o degrau)
+    const p1 = at(1), p2 = at(2), p3 = at(3);
+    body = el('div', { class: 'body' },
+      el('span', { class: 'label', style: 'text-align:center;font-size:clamp(.9rem,1.4vw,1.2rem)', text: d.title }),
+      el('h1', { style: 'font-size:clamp(2rem,5vw,4rem);text-align:center', text: 'Resultado final' }),
+      el('div', { class: 'podium' }, step('p2', 2, p2), step('p1', 1, p1), step('p3', 3, p3)),
+      el('div', { class: 'rest' }, ranked.filter(p => p.rank > 3).slice(0, 7).map(p => el('span', { text: `${p.rank}º ${p.name} · ${fmt(p.score)}` }))));
+    foot = el('div', { class: 'foot' },
+      el('button', { class: 'btn ghost', onclick: backToEditor, text: 'Voltar ao editor' }),
+      el('button', { class: 'btn danger', onclick: async () => { await act('close'); Store.del('quiz.live'); }, text: 'Encerrar sala' }));
+  }
+  root.replaceChildren(el('div', { class: 'stage' }, strip(d, v !== 'lobby' && d.open), body, foot));
+  updateLive();
+}
+
+function svgClock(R, C) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  const bg = document.createElementNS(ns, 'circle');
+  bg.setAttribute('cx', 50); bg.setAttribute('cy', 50); bg.setAttribute('r', R);
+  bg.setAttribute('fill', 'none'); bg.setAttribute('stroke', 'var(--soft)'); bg.setAttribute('stroke-width', 10);
+  const fg = document.createElementNS(ns, 'circle');
+  fg.setAttribute('cx', 50); fg.setAttribute('cy', 50); fg.setAttribute('r', R);
+  fg.setAttribute('fill', 'none'); fg.setAttribute('stroke', 'var(--ink)'); fg.setAttribute('stroke-width', 10);
+  fg.setAttribute('stroke-linecap', 'round'); fg.setAttribute('stroke-dasharray', C); fg.id = 'ring';
+  fg.dataset.c = C;
+  svg.append(bg, fg);
+  return svg;
+}
+
+function updateLive() {
+  const d = L.data;
+  if (!d) return;
+  const v = liveView(d);
+  if (`${v}:${d.q_index}` !== L.viewKey) { renderLive(); return; }
+  const now = Clock.now();
+  const nPlayers = d.players.length;
+  if (v === 'lobby') {
+    const pc = document.getElementById('pcount');
+    if (pc) pc.textContent = nPlayers === 1 ? '1 pessoa na sala' : `${nPlayers} pessoas na sala`;
+    const people = document.getElementById('people');
+    if (people) {
+      const have = new Map([...people.children].map(c => [c.dataset.id, c]));
+      const ids = new Set(d.players.map(p => p.id));
+      for (const [id, c] of have) if (!ids.has(id)) c.remove();
+      // nomes novos entram no começo
+      d.players.forEach(p => {
+        if (have.has(p.id)) return;
+        const chip = el('button', { class: 'chip', 'data-id': p.id, text: p.name, title: 'Clique pra tirar da sala' });
+        chip.addEventListener('click', () => {
+          if (chip.classList.contains('confirm')) { chip.remove(); act('kick', p.id); return; }
+          chip.classList.add('confirm'); chip.textContent = `Remover ${p.name}?`;
+          setTimeout(() => { if (chip.isConnected) { chip.classList.remove('confirm'); chip.textContent = p.name; } }, 3000);
+        });
+        people.prepend(chip);
+      });
+    }
+    const pb = document.getElementById('primary');
+    if (pb) pb.disabled = nPlayers === 0;
+  } else if (v === 'countdown') {
+    const cd = document.getElementById('cd');
+    if (cd) cd.textContent = Math.max(1, Math.ceil((d.starts_at - now) / 1000));
+  } else if (v === 'question') {
+    const left = Math.max(0, d.ends_at - now);
+    const total = d.ends_at - d.starts_at;
+    const s = document.getElementById('secs');
+    if (s) s.textContent = Math.ceil(left / 1000);
+    const ring = document.getElementById('ring');
+    if (ring) { const C = +ring.dataset.c; ring.setAttribute('stroke-dashoffset', String(C * (1 - left / total))); }
+    const a = document.getElementById('ans');
+    if (a) a.textContent = `${d.answered}/${nPlayers}`;
+    // fecha sozinho: tempo acabou (+1,5 s de tolerância pra respostas em trânsito) ou todos responderam
+    const allIn = nPlayers > 0 && d.answered >= nPlayers;
+    if (L.revealAsked !== d.q_index && (now > d.ends_at + 1500 || allIn)) {
+      L.revealAsked = d.q_index;
+      act('reveal');
+    }
+  }
+}
+setInterval(() => { if (L.sid && L.data) updateLive(); }, 100);
+
+document.addEventListener('keydown', (e) => {
+  if (!L.sid) return;
+  if (e.target.matches('input, textarea, select')) return;
+  if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+    const b = document.getElementById('primary');
+    if (b && !b.disabled) { e.preventDefault(); b.click(); }
+  }
+});
+
+function renderLoading(msg) {
+  root.replaceChildren(el('div', { style: 'min-height:100%;display:grid;place-items:center;padding:16px' }, el('p', { class: 'muted', text: msg })));
+}
+
+window.addEventListener('beforeunload', (e) => { if (E.dirty && !L.sid) { save(); } });
+
+// ================= INÍCIO =================
+(function boot() {
+  const m = location.hash.match(/^#s=([0-9a-f-]{36})\.([0-9a-f-]{36})$/i);
+  if (m) {
+    const live = Store.get('quiz.live') || {};
+    resumeLive({ ...live, sid: m[1], hk: m[2] });
+  } else {
+    openEditor();
+  }
+})();
+</script>
+</body>
+</html>
