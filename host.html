@@ -513,6 +513,7 @@ async function act(action, arg) {
 }
 
 function liveView(d) {
+  if (!d.open) return 'closed';
   if (d.phase === 'question') return Clock.now() < d.starts_at ? 'countdown' : 'question';
   return d.phase;
 }
