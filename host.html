@@ -431,7 +431,7 @@ function deleteQuizBtn() {
     b.disabled = true;
     clearTimeout(E.saveTimer); E.dirty = false;
     try {
-      await Api.rpc('admin_delete_quiz', { p_token: A.token, p_quiz: E.quiz.id });
+      await Api.rpc('admin_archive_quiz', { p_token: A.token, p_quiz: E.quiz.id });
       Store.del('quiz.draft.' + E.quiz.id); Store.del('quiz.current');
       toast('Quiz apagado.');
       openEditor();

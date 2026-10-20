@@ -10,11 +10,14 @@ create table if not exists private.admins(
 );
 create table if not exists private.admin_sessions(
   token_hash text primary key,
-  email text not null references private.admins(email) on delete cascade,
+  email text not null references private.admins(email),
   created_at timestamptz not null default now(),
   expires_at timestamptz not null
 );
 revoke all on private.admins, private.admin_sessions from public, anon, authenticated;
+
+-- "Apagar quiz" no editor esconde o quiz (fica guardado no banco)
+alter table public.quizzes add column if not exists archived_at timestamptz;
 
 create or replace function private.admin_email(p_token text) returns text
 language sql stable security definer set search_path = '' as $$
@@ -48,7 +51,6 @@ begin
     return jsonb_build_object('ok', false, 'error', 'E-mail ou senha incorretos');
   end if;
   update private.admins set failed = 0, locked_until = null where email = a.email;
-  delete from private.admin_sessions where expires_at < now();
   tok := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
   insert into private.admin_sessions(token_hash, email, expires_at) values (private.h(tok), a.email, now() + interval '90 days');
   return jsonb_build_object('ok', true, 'token', tok, 'email', a.email);
@@ -57,7 +59,7 @@ end $$;
 create or replace function public.admin_logout(p_token text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
-  delete from private.admin_sessions where token_hash = private.h(p_token);
+  update private.admin_sessions set expires_at = now() where token_hash = private.h(p_token);
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -75,7 +77,7 @@ begin
   end if;
   update private.admins set pw_hash = extensions.crypt(p_new, extensions.gen_salt('bf', 10)) where email = em;
   -- encerra os logins nos outros computadores
-  delete from private.admin_sessions where email = em and token_hash <> private.h(p_token);
+  update private.admin_sessions set expires_at = now() where email = em and token_hash <> private.h(p_token) and expires_at > now();
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -86,14 +88,14 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object('id', q.id, 'title', q.title, 'n', jsonb_array_length(q.questions),
                                         'updated_at', private.ms(q.updated_at)) order by q.updated_at desc)
-    from public.quizzes q), '[]'::jsonb);
+    from public.quizzes q where q.archived_at is null), '[]'::jsonb);
 end $$;
 
-create or replace function public.admin_delete_quiz(p_token text, p_quiz uuid)
+create or replace function public.admin_archive_quiz(p_token text, p_quiz uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
   if not private.admin_ok(p_token) then raise exception 'Sessão expirada. Entre de novo.'; end if;
-  delete from public.quizzes where id = p_quiz;
+  update public.quizzes set archived_at = now() where id = p_quiz;
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -119,7 +121,7 @@ create or replace function public.get_quiz(p_quiz uuid, p_key text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare qz public.quizzes;
 begin
-  select * into qz from public.quizzes where id = p_quiz and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
+  select * into qz from public.quizzes where id = p_quiz and archived_at is null and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
   if not found then raise exception 'Quiz não encontrado'; end if;
   return jsonb_build_object('id', qz.id, 'title', qz.title, 'questions', qz.questions, 'updated_at', private.ms(qz.updated_at));
 end $$;
@@ -129,7 +131,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
   perform private.check_questions(p_questions, false);
   update public.quizzes set title = private.clean_title(p_title), questions = p_questions, updated_at = now()
-  where id = p_quiz and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
+  where id = p_quiz and archived_at is null and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
   if not found then raise exception 'Quiz não encontrado'; end if;
   return jsonb_build_object('ok', true);
 end $$;
@@ -138,7 +140,7 @@ create or replace function public.create_session(p_quiz uuid, p_key text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare qz public.quizzes; v_pin text; hk text := gen_random_uuid()::text; sid uuid; tries int := 0;
 begin
-  select * into qz from public.quizzes where id = p_quiz and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
+  select * into qz from public.quizzes where id = p_quiz and archived_at is null and (edit_key_hash = private.h(p_key) or private.admin_ok(p_key));
   if not found then raise exception 'Quiz não encontrado'; end if;
   perform private.check_questions(qz.questions, true);
   update public.sessions set open = false where open and created_at < now() - interval '12 hours';
@@ -157,7 +159,7 @@ begin
 end $$;
 
 revoke all on function public.admin_login, public.admin_logout, public.admin_change_password,
-  public.admin_list_quizzes, public.admin_delete_quiz, public.create_quiz(text, text, jsonb) from public;
+  public.admin_list_quizzes, public.admin_archive_quiz, public.create_quiz(text, text, jsonb) from public;
 grant execute on function public.admin_login, public.admin_logout, public.admin_change_password,
-  public.admin_list_quizzes, public.admin_delete_quiz, public.create_quiz(text, text, jsonb) to anon, authenticated;
+  public.admin_list_quizzes, public.admin_archive_quiz, public.create_quiz(text, text, jsonb) to anon, authenticated;
 revoke all on function private.admin_email, private.admin_ok from public, anon, authenticated;
