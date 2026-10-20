@@ -61,6 +61,13 @@
   .add-q { border: 2px dashed var(--ink); background: transparent; border-radius: var(--r); padding: 18px; font-weight: 700; font-size: 1.05rem; cursor: pointer; }
   .add-q:hover { background: var(--card); }
   .hint { color: var(--muted); font-size: .9rem; }
+  .account { max-width: 920px; margin: 12px auto 0; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .account .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; max-width: none; width: 100%; }
+  .pw-form { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .pw-form .input { flex: 1 1 200px; min-width: 0; padding: 9px 12px; }
+  .login-wrap { flex: 1; min-height: 100%; display: grid; place-items: center; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .login { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; background: var(--card); border: 2px solid var(--ink); border-radius: var(--r); padding: 28px; }
+  .login .btn { margin-top: 6px; }
 
   /* ================= AO VIVO ================= */
   #root { min-height: 100%; display: flex; flex-direction: column; }
@@ -184,12 +191,58 @@ const L = {            // ao vivo
   revealAsked: -1, failSince: 0, confirmKick: null, busy: false
 };
 
+// ================= LOGIN =================
+const A = { token: Store.get('quiz.token'), email: Store.get('quiz.email') || '', list: [] };
+function isAuthError(e) { return e && e.status && /Sessão expirada/i.test(e.message); }
+function logout(msg) {
+  const t = A.token;
+  A.token = null; A.list = [];
+  Store.del('quiz.token');
+  if (t) Api.rpc('admin_logout', { p_token: t }).catch(() => {});
+  clearTimeout(E.saveTimer);
+  renderLogin(msg);
+}
+function renderLogin(msg) {
+  stopLive();
+  const email = el('input', { class: 'input', id: 'login-email', type: 'email', autocomplete: 'username', placeholder: 'seu@gmail.com', value: A.email, 'aria-label': 'E-mail' });
+  const pw = el('input', { class: 'input', id: 'login-pw', type: 'password', autocomplete: 'current-password', placeholder: 'Senha', 'aria-label': 'Senha' });
+  const err = el('div', { class: 'problem', role: 'alert', text: msg || '' });
+  const btn = el('button', { class: 'btn big', type: 'submit', text: 'Entrar' });
+  const form = el('form', { class: 'login', novalidate: true },
+    el('div', { class: 'logo', style: 'font-size:2rem' }, 'Quiz ', el('span', { text: 'ao vivo' })),
+    el('p', { class: 'hint', text: 'Área do apresentador. Entre pra ver e editar seus quizzes.' }),
+    el('label', { class: 'label', for: 'login-email', text: 'E-mail' }), email,
+    el('label', { class: 'label', for: 'login-pw', text: 'Senha' }), pw,
+    err, btn);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!email.value.trim() || !pw.value) { err.textContent = 'Preencha e-mail e senha.'; return; }
+    btn.disabled = true; btn.textContent = 'Entrando…'; err.textContent = '';
+    try {
+      const r = await Api.rpc('admin_login', { p_email: email.value, p_pw: pw.value });
+      if (!r.ok) { err.textContent = r.error; btn.disabled = false; btn.textContent = 'Entrar'; return; }
+      A.token = r.token; A.email = r.email;
+      Store.set('quiz.token', r.token); Store.set('quiz.email', r.email);
+      openEditor();
+    } catch (ex) {
+      err.textContent = ex.network ? 'Sem conexão com o servidor.' : ex.message;
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+  root.replaceChildren(el('div', { class: 'login-wrap' }, form));
+  (A.email ? pw : email).focus();
+}
+async function loadList() {
+  A.list = await Api.rpc('admin_list_quizzes', { p_token: A.token });
+  return A.list;
+}
+
 // ================= ARMAZENAMENTO LOCAL =================
-function myQuizzes() { return Store.get('quiz.mine', []); }
+function myQuizzes() { return A.list; }
 function rememberQuiz(q) {
-  const list = myQuizzes().filter(x => x.id !== q.id);
-  list.unshift({ id: q.id, key: q.key, title: q.title });
-  Store.set('quiz.mine', list.slice(0, 30));
+  const i = A.list.findIndex(x => x.id === q.id);
+  const item = { id: q.id, title: q.title, n: q.questions.length, updated_at: Date.now() };
+  if (i >= 0) A.list[i] = { ...A.list[i], ...item }; else A.list.unshift(item);
   Store.set('quiz.current', q.id);
 }
 function cacheDraft() { if (E.quiz) Store.set('quiz.draft.' + (E.quiz.id || 'new'), stripIds(E.quiz)); }
@@ -201,13 +254,22 @@ function withIds(qs) { return (qs || []).map(q => ({ _id: uid(), ...q })); }
 // ================= EDITOR =================
 async function openEditor() {
   stopLive();
+  if (!A.token) { renderLogin(); return; }
+  renderLoading('Abrindo seus quizzes…');
+  try {
+    await loadList();
+  } catch (e) {
+    if (isAuthError(e)) { logout('Seu login expirou. Entre de novo.'); return; }
+    toast(e.network ? 'Sem conexão com o servidor.' : e.message);
+  }
   const h = location.hash;
   let target = null;
   const m = h.match(/^#q=([0-9a-f-]{36})\.([0-9a-f-]{36})$/i);
   if (m) target = { id: m[1], key: m[2] };
   else {
     const cur = Store.get('quiz.current');
-    target = myQuizzes().find(x => x.id === cur) || null;
+    const found = A.list.find(x => x.id === cur) || A.list[0];
+    if (found) target = { id: found.id, key: A.token };
   }
   if (target) {
     renderLoading('Abrindo quiz…');
@@ -216,6 +278,7 @@ async function openEditor() {
       E.quiz = { id: r.id, key: target.key, title: r.title, questions: withIds(r.questions) };
       rememberQuiz(E.quiz);
     } catch (e) {
+      if (isAuthError(e)) { logout('Seu login expirou. Entre de novo.'); return; }
       const draft = Store.get('quiz.draft.' + target.id);
       if (draft && e.network) {
         E.quiz = { ...draft, questions: withIds(draft.questions) };
@@ -232,7 +295,7 @@ async function openEditor() {
   E.status = E.quiz.id ? 'Salvo' : '';
   renderEditor();
 }
-function newQuiz() { return { id: null, key: null, title: 'Meu quiz', questions: exampleQuestions() }; }
+function newQuiz() { return { id: null, key: A.token, title: 'Novo quiz', questions: exampleQuestions() }; }
 
 function changed() {
   E.dirty = true;
@@ -251,8 +314,10 @@ async function save() {
   const payload = stripIds(E.quiz);
   try {
     if (!E.quiz.id) {
-      const r = await Api.rpc('create_quiz', { p_title: payload.title, p_questions: payload.questions });
-      E.quiz.id = r.id; E.quiz.key = r.key;
+      const r = await Api.rpc('create_quiz', { p_token: A.token, p_title: payload.title, p_questions: payload.questions });
+      E.quiz.id = r.id; E.quiz.key = A.token;
+      const slot = document.getElementById('del-slot');
+      if (slot && !slot.firstChild) { const b = deleteQuizBtn(); if (b) slot.append(b); }
     } else {
       await Api.rpc('save_quiz', { p_quiz: E.quiz.id, p_key: E.quiz.key, p_title: payload.title, p_questions: payload.questions });
     }
@@ -263,6 +328,7 @@ async function save() {
     return true;
   } catch (e) {
     E.dirty = true;
+    if (isAuthError(e)) { cacheDraft(); logout('Seu login expirou. Entre de novo (suas últimas alterações ficaram guardadas neste navegador).'); return false; }
     E.status = e.network ? 'Sem conexão. Vou tentar de novo.' : 'Erro ao salvar: ' + e.message;
     clearTimeout(E.saveTimer); E.saveTimer = setTimeout(save, 4000);
     return false;
@@ -304,7 +370,7 @@ function renderQuizPicker() {
   const list = myQuizzes();
   const sel = el('select', { class: 'sel', id: 'quiz-picker', 'aria-label': 'Escolher quiz' },
     list.map(x => el('option', { value: x.id, selected: E.quiz && x.id === E.quiz.id, text: x.title || 'Sem título' })),
-    !E.quiz.id ? el('option', { value: '', selected: true, text: 'Novo quiz (não salvo)' }) : null,
+    !E.quiz.id ? el('option', { value: '', selected: true, text: `${E.quiz.title || 'Novo quiz'} (não salvo)` }) : null,
     el('option', { value: '__new', text: '+ Novo quiz' }));
   sel.addEventListener('change', async () => {
     await save();
@@ -336,8 +402,9 @@ function renderEditor() {
       el('div', { class: 'logo' }, 'Quiz ', el('span', { text: 'ao vivo' })),
       el('div', { id: 'picker' }),
       el('span', { class: 'status', id: 'status', 'aria-live': 'polite' }),
-      el('button', { class: 'btn ghost small', onclick: copyEditLink, text: 'Copiar link de edição' }),
-      el('button', { class: 'btn', id: 'start-btn', onclick: startLive, text: 'Iniciar ao vivo' }))),
+      el('button', { class: 'btn ghost small', id: 'account-btn', 'aria-expanded': 'false', onclick: toggleAccount, text: 'Conta' }),
+      el('button', { class: 'btn', id: 'start-btn', onclick: startLive, text: 'Iniciar ao vivo' })),
+      accountPanel()),
     el('main', { class: 'ed' },
       live ? el('div', { class: 'live-banner' },
         el('span', {}, 'Tem uma sessão ao vivo aberta (PIN ', el('b', { text: live.pin || '…' }), ').'),
@@ -346,8 +413,65 @@ function renderEditor() {
       el('div', { class: 'summary', id: 'summary' }),
       el('p', { class: 'hint', text: 'Tudo é salvo automaticamente. Na sessão, cada pergunta vale até 1.000 pontos (ou 2.000 / 3.000 com bônus): quem acerta mais rápido ganha mais, e acerto em menos de meio segundo leva o máximo.' }),
       list,
-      addBtn));
+      addBtn,
+      el('div', { id: 'del-slot' }, deleteQuizBtn())));
   renderQuizPicker(); updateStatus(); updateSummary();
+}
+
+function deleteQuizBtn() {
+  if (!E.quiz.id) return null;
+  const b = el('button', { class: 'btn ghost small', id: 'delete-quiz', style: 'align-self:flex-start;color:var(--bad);border-color:var(--bad)', text: 'Apagar este quiz' });
+  let armed = false;
+  b.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true; b.textContent = `Apagar "${E.quiz.title}" de vez? Clique de novo`;
+      setTimeout(() => { if (armed && b.isConnected) { armed = false; b.textContent = 'Apagar este quiz'; } }, 4000);
+      return;
+    }
+    b.disabled = true;
+    clearTimeout(E.saveTimer); E.dirty = false;
+    try {
+      await Api.rpc('admin_delete_quiz', { p_token: A.token, p_quiz: E.quiz.id });
+      Store.del('quiz.draft.' + E.quiz.id); Store.del('quiz.current');
+      toast('Quiz apagado.');
+      openEditor();
+    } catch (e) {
+      if (isAuthError(e)) { logout('Seu login expirou. Entre de novo.'); return; }
+      b.disabled = false; toast(e.message);
+    }
+  });
+  return b;
+}
+
+function accountPanel() {
+  const cur = el('input', { class: 'input', id: 'pw-cur', type: 'password', autocomplete: 'current-password', placeholder: 'Senha atual', 'aria-label': 'Senha atual' });
+  const nw = el('input', { class: 'input', id: 'pw-new', type: 'password', autocomplete: 'new-password', placeholder: 'Senha nova (mín. 8 caracteres)', 'aria-label': 'Senha nova' });
+  const msg = el('div', { class: 'hint', role: 'status' });
+  const btn = el('button', { class: 'btn small', type: 'submit', text: 'Trocar senha' });
+  const form = el('form', { class: 'pw-form', novalidate: true }, cur, nw, btn);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true; msg.textContent = '';
+    try {
+      const r = await Api.rpc('admin_change_password', { p_token: A.token, p_old: cur.value, p_new: nw.value });
+      if (!r.ok) { msg.textContent = r.error; msg.style.color = 'var(--bad)'; }
+      else { msg.textContent = 'Senha trocada. Os logins em outros computadores foram encerrados.'; msg.style.color = 'var(--good)'; cur.value = ''; nw.value = ''; }
+    } catch (ex) {
+      if (isAuthError(ex)) { logout('Seu login expirou. Entre de novo.'); return; }
+      msg.textContent = ex.message; msg.style.color = 'var(--bad)';
+    } finally { btn.disabled = false; }
+  });
+  return el('div', { class: 'account', id: 'account', hidden: true },
+    el('div', { class: 'row', style: 'justify-content:space-between' },
+      el('span', {}, 'Conectado como ', el('b', { text: A.email })),
+      el('button', { class: 'btn ghost small', onclick: () => logout(), text: 'Sair' })),
+    el('div', { class: 'row' }, form),
+    el('div', { class: 'row' }, msg));
+}
+function toggleAccount() {
+  const p = document.getElementById('account'), b = document.getElementById('account-btn');
+  p.hidden = !p.hidden; b.setAttribute('aria-expanded', String(!p.hidden));
+  if (!p.hidden) document.getElementById('pw-cur').focus();
 }
 function rerenderList() {
   const list = document.getElementById('qlist');
@@ -424,13 +548,6 @@ function questionCard(qq, i) {
   return card;
 }
 function stripOne(q) { const { _id, _mcBackup, ...r } = q; return r; }
-
-async function copyEditLink() {
-  if (!(await save()) || !E.quiz.id) { toast('Salve o quiz primeiro (precisa de conexão).'); return; }
-  const url = `${location.origin}${location.pathname}#q=${E.quiz.id}.${E.quiz.key}`;
-  try { await navigator.clipboard.writeText(url); toast('Link copiado. Quem tiver esse link pode editar o quiz.'); }
-  catch (_) { prompt('Copie o link de edição:', url); }
-}
 
 // ================= INICIAR AO VIVO =================
 async function startLive() {
